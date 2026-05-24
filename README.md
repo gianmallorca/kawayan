@@ -146,17 +146,24 @@ Railway hosts the app **and** PostgreSQL on the same private network — no exte
 
 ### 1. Link PostgreSQL on Railway
 
-Link the Postgres service to **kawayan** so Railway injects `DATABASE_URL`:
+1. Railway project → **kawayan** service → **Variables** → **Add Reference** → select your **Postgres** service
+2. On the **kawayan** service, add:
 
 ```
-postgresql://postgres:PASSWORD@postgres.railway.internal:5432/railway
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 ```
 
-Or set explicitly:
+The app reads `DATABASE_URL` automatically (`DatabaseConnection.cs`). No need to copy Postgres-internal vars like `${{RAILWAY_PRIVATE_DOMAIN}}` — those live on the Postgres service only.
 
-```
-ConnectionStrings__DefaultConnection=Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Database=${{Postgres.PGDATABASE}};Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}};SSL Mode=Require;Trust Server Certificate=true
-```
+**Postgres service** (Railway-managed — for reference):
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Internal: `${{RAILWAY_PRIVATE_DOMAIN}}:5432` |
+| `DATABASE_PUBLIC_URL` | External proxy for local `psql` / dev |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `postgres` / (secret) / `railway` |
+
+**Local dev:** copy the resolved `DATABASE_PUBLIC_URL` from Postgres → Variables into `appsettings.Development.json` or `.env`.
 
 ### 2. First-deploy variables
 
