@@ -1,12 +1,15 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using kawayan.API;
 using kawayan.API.Data;
 using kawayan.API.Middleware;
 using kawayan.API.Security;
 using kawayan.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -41,7 +44,17 @@ builder.Services.AddHttpClient("Nominatim", client =>
 });
 builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<SiteServicesService>();
+builder.Services.AddSingleton<R2StorageService>();
 builder.Services.AddScoped<MediaService>();
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = UploadLimits.MaxImageBytes;
+});
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = UploadLimits.MaxImageBytes;
+});
 builder.Services.AddScoped<InquiriesService>();
 builder.Services.AddScoped<ArticlesService>();
 builder.Services.AddScoped<LegalPagesService>();
@@ -99,6 +112,11 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+if (app.Services.GetRequiredService<R2StorageService>().IsConfigured)
+    app.Logger.LogInformation("Cloudflare R2 storage enabled for uploads.");
+else
+    app.Logger.LogWarning("R2 not configured; uploads stored on local disk (wwwroot/uploads).");
 
 var applyMigrations = builder.Configuration.GetValue(
     "Database:ApplyMigrationsOnStartup",

@@ -10,7 +10,7 @@ using kawayan.API;
 
 namespace kawayan.API.Services;
 
-public class MediaService(AppDbContext db, IWebHostEnvironment env)
+public class MediaService(AppDbContext db, IWebHostEnvironment env, R2StorageService r2)
 {
     private static readonly HashSet<string> ImageMimeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -57,14 +57,21 @@ public class MediaService(AppDbContext db, IWebHostEnvironment env)
         var ext = Path.GetExtension(file.FileName);
         if (string.IsNullOrEmpty(ext)) ext = ".jpg";
         var storedName = $"{SanitizePrefix(typePrefix)}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}{ext.ToLowerInvariant()}";
-        var uploadsDir = GetUploadsDir();
-        Directory.CreateDirectory(uploadsDir);
-        var path = Path.Combine(uploadsDir, storedName);
 
-        await using (var stream = File.Create(path))
-            await file.CopyToAsync(stream);
-
-        var url = $"/uploads/{storedName}";
+        string url;
+        if (r2.IsConfigured)
+        {
+            url = await r2.UploadFileAsync(file, storedName);
+        }
+        else
+        {
+            var uploadsDir = GetUploadsDir();
+            Directory.CreateDirectory(uploadsDir);
+            var path = Path.Combine(uploadsDir, storedName);
+            await using (var stream = File.Create(path))
+                await file.CopyToAsync(stream);
+            url = $"/uploads/{storedName}";
+        }
 
         if (trackInMediaLibrary)
         {
@@ -105,13 +112,19 @@ public class MediaService(AppDbContext db, IWebHostEnvironment env)
 
     public async Task TryDeleteFileIfUnusedAsync(string? url)
     {
-        if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(url)) return;
+        if (!url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) && !r2.IsR2Url(url))
             return;
 
         if (await IsUrlReferencedAsync(url)) return;
 
-        var physicalPath = GetPhysicalPath(url);
-        if (File.Exists(physicalPath)) File.Delete(physicalPath);
+        if (r2.IsR2Url(url))
+            await r2.DeleteFileAsync(r2.GetKeyFromUrl(url));
+        else
+        {
+            var physicalPath = GetPhysicalPath(url);
+            if (File.Exists(physicalPath)) File.Delete(physicalPath);
+        }
 
         var media = await db.MediaFiles.FirstOrDefaultAsync(m => m.Url == url);
         if (media is not null)
