@@ -1,8 +1,7 @@
 {
   "files.associations": {
     "*.sql": "sql",
-    "*.pgsql": "sql",
-    "database/deploy.sqlserver.sql": "sql"
+    "*.pgsql": "sql"
   },
   "mssql.enableIntelliSense": false,
   "sqltools.useNodeRuntime": true,

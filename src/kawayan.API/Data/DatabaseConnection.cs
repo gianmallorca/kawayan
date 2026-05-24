@@ -8,7 +8,8 @@ public static class DatabaseConnection
         if (!string.IsNullOrWhiteSpace(fromConfig))
             return fromConfig;
 
-        var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+        var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
+            ?? Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL");
         if (!string.IsNullOrWhiteSpace(databaseUrl))
             return FromDatabaseUrl(databaseUrl);
 

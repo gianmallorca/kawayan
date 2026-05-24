@@ -41,8 +41,7 @@ The API serves the built React app from `wwwroot` and exposes REST endpoints und
 ```
 kawayan/
 ├── database/
-│   ├── deploy.sql          # PostgreSQL deploy + seed (idempotent)
-│   └── deploy.sqlserver.sql # Legacy SQL Server script (archived)
+│   └── deploy.pgsql        # PostgreSQL deploy + seed (idempotent)
 ├── Dockerfile              # Railway / container build
 ├── railway.toml            # Railway deploy settings
 ├── .env                    # Local secrets (gitignored)
@@ -64,25 +63,29 @@ Building the API project runs `npm ci` and `npm run build` in `kawayan.Web`, the
 
 ### 1. Configure the database
 
-Install PostgreSQL locally, create a database, then update `src/kawayan.API/appsettings.Development.json` (gitignored) or use the default in `appsettings.json`:
+**Local dev** (connects to Railway Postgres via public proxy) — already set in `appsettings.Development.json`:
 
 ```json
-"ConnectionStrings": {
-  "DefaultConnection": "Host=localhost;Port=5432;Database=kawayan_dev;Username=postgres;Password=postgres"
-}
+"DefaultConnection": "Host=kodama.proxy.rlwy.net;Port=20037;Database=railway;Username=postgres;Password=...;SSL Mode=Require;Trust Server Certificate=true"
 ```
 
-In Development, the API applies EF migrations and runs seed data on startup by default.
+**Railway production** — on the kawayan service, set:
+
+```
+DATABASE_URL=postgresql://postgres:PASSWORD@postgres.railway.internal:5432/railway
+```
+
+Or link the Postgres plugin (Railway injects `DATABASE_URL` automatically).
+
+Run migrations or the deploy script:
 
 ```powershell
 cd src/kawayan.API
 dotnet ef database update
 ```
 
-Or run the SQL deploy script against PostgreSQL (Railway Query tab or `psql`):
-
 ```powershell
-psql "$DATABASE_URL" -f database/deploy.sql
+psql "$DATABASE_PUBLIC_URL" -f database/deploy.pgsql
 ```
 
 ### 2. Run the app
@@ -115,7 +118,7 @@ npm run dev
 
 Open [http://localhost:5180](http://localhost:5180).
 
-### Default admin account (deploy.sql seed)
+### Default admin account (deploy.pgsql seed)
 
 | Email | Password |
 |-------|----------|
@@ -128,28 +131,32 @@ EF startup seed (`DbSeeder`) uses `admin@kawayan.test` / `Admin123!` if `Databas
 | Setting | Description |
 |---------|-------------|
 | `ConnectionStrings:DefaultConnection` | PostgreSQL connection string (Npgsql format) |
-| `DATABASE_URL` | Alternative — Railway sets this automatically when PostgreSQL is linked |
+| `DATABASE_URL` | Railway internal Postgres URL (production) |
+| `DATABASE_PUBLIC_URL` | Railway public proxy URL (local dev from your PC) |
 | `Jwt:Key` | Signing key (minimum 32 characters) |
 | `Jwt:Issuer` / `Jwt:Audience` | JWT validation |
 | `Database:ApplyMigrationsOnStartup` | Run EF migrations on startup (default `true` in Development) |
 | `Database:SeedOnStartup` | Run C# seed data on startup (default `true` in Development) |
 
-On hosted platforms (Railway, MonsterASP, etc.), set these as environment variables using `__` as the section separator (`ConnectionStrings__DefaultConnection`, `Jwt__Key`, etc.). Keep real values in a local `.env` file (gitignored) or your host’s variable panel.
+On Railway, set variables on the **kawayan** service using `__` as the section separator. Keep secrets in `.env` (gitignored).
 
 ## Deploy to Railway (PostgreSQL)
 
 Railway hosts the app **and** PostgreSQL on the same private network — no external SQL firewall issues.
 
-### 1. Add PostgreSQL on Railway
+### 1. Link PostgreSQL on Railway
 
-1. Railway project → **+ New** → **Database** → **PostgreSQL**
-2. In your **kawayan** web service → **Variables**, reference the Postgres service:
+Link the Postgres service to **kawayan** so Railway injects `DATABASE_URL`:
 
 ```
-ConnectionStrings__DefaultConnection=Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Database=${{Postgres.PGDATABASE}};Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}}
+postgresql://postgres:PASSWORD@postgres.railway.internal:5432/railway
 ```
 
-Or link the PostgreSQL plugin so Railway injects `DATABASE_URL` (supported automatically).
+Or set explicitly:
+
+```
+ConnectionStrings__DefaultConnection=Host=${{Postgres.PGHOST}};Port=${{Postgres.PGPORT}};Database=${{Postgres.PGDATABASE}};Username=${{Postgres.PGUSER}};Password=${{Postgres.PGPASSWORD}};SSL Mode=Require;Trust Server Certificate=true
+```
 
 ### 2. First-deploy variables
 
@@ -197,17 +204,15 @@ dotnet ef migrations add <Name>
 dotnet ef database update
 ```
 
-Regenerate the idempotent schema block (then merge seed sections from `deploy.sql`):
+Regenerate the idempotent schema block (then merge seed sections from `deploy.pgsql`):
 
 ```powershell
 dotnet ef migrations script --idempotent -p src/kawayan.API -o database/_schema.postgresql.sql
 ```
 
-> `database/deploy.sqlserver.sql` is the archived **SQL Server** script. Use `deploy.sql` for PostgreSQL.
-
 ### Seed data
 
-`database/deploy.sql` includes idempotent seed data (company, services, admin, articles, page sections, legal pages).
+`database/deploy.pgsql` includes idempotent seed data (company, services, admin, articles, page sections, legal pages).
 
 When `Database:SeedOnStartup` is enabled, `KawayanSeedData.cs`, `LegalPagesSeedData.cs`, and `DbSeeder.cs` also populate sample content idempotently.
 

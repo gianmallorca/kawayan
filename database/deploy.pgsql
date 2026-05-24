@@ -9,13 +9,11 @@
  Migration : 20260524042919_InitialPostgres
 
  Usage     :
-   psql "postgresql://user:pass@host:5432/dbname" -f database/deploy.sql
-   Railway → connect to Postgres service → Query tab → paste/run
+   psql "$DATABASE_PUBLIC_URL" -f database/deploy.pgsql
+   Railway → Postgres service → Query tab → paste/run
 
  Regenerate schema block:
    dotnet ef migrations script --idempotent -p src/kawayan.API -o database/_schema.postgresql.sql
-
- Legacy SQL Server script: database/deploy.sqlserver.sql
 ================================================================================
 */
 
