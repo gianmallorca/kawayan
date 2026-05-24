@@ -117,7 +117,10 @@ if (applyMigrations || seedOnStartup)
             .CreateLogger("DatabaseStartup");
 
         if (applyMigrations)
+        {
             db.Database.Migrate();
+            logger.LogInformation("Database migrations applied.");
+        }
 
         if (seedOnStartup)
         {
@@ -125,6 +128,7 @@ if (applyMigrations || seedOnStartup)
             await MapCoordinateBackfill.TryBackfillAsync(
                 db,
                 scope.ServiceProvider.GetRequiredService<GeocodingService>());
+            logger.LogInformation("Database seed completed.");
         }
     }
     catch (Exception ex)
@@ -132,10 +136,12 @@ if (applyMigrations || seedOnStartup)
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
         logger.LogError(
             ex,
-            "Database startup failed (migrate={Migrate}, seed={Seed}). " +
-            "Check PostgreSQL connection or set Database__ApplyMigrationsOnStartup=true after fixing the connection.",
+            "Database startup failed (migrate={Migrate}, seed={Seed}).",
             applyMigrations,
             seedOnStartup);
+
+        if (!app.Environment.IsDevelopment())
+            throw;
     }
 }
 
