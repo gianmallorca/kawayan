@@ -514,3 +514,15 @@ SELECT
 WHERE NOT EXISTS (SELECT 1 FROM "Articles" WHERE "Slug" = 'wholesale-checklist-for-buyers');
 
 DO $$ BEGIN RAISE NOTICE 'kawayan database deploy completed.'; END $$;
+
+/* =============================================================================
+   STEP 4 - Verify seed (run this alone if deploy returned "no rows" — that is normal for INSERT)
+   ============================================================================= */
+SELECT
+    (SELECT COUNT(*) FROM "CompanyDetails") AS company_rows,
+    (SELECT COUNT(*) FROM "Services") AS service_rows,
+    (SELECT COUNT(*) FROM "Users") AS user_rows,
+    (SELECT COUNT(*) FROM "Articles") AS article_rows,
+    (SELECT COUNT(*) FROM "PageSections") AS page_section_rows,
+    (SELECT COUNT(*) FROM "LegalPages") AS legal_page_rows,
+    (SELECT "Email" FROM "Users" LIMIT 1) AS admin_email;
