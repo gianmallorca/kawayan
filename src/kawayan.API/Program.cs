@@ -13,12 +13,16 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException(
         "ConnectionStrings:DefaultConnection is not configured. " +
-        "On MonsterASP set ConnectionStrings__DefaultConnection in Website → Environment Variables.");
+        "Set ConnectionStrings__DefaultConnection (Railway Variables, MonsterASP env vars, or appsettings).");
 }
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -62,7 +66,7 @@ if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
 {
     throw new InvalidOperationException(
         "Jwt:Key must be at least 32 characters. " +
-        "On MonsterASP set Jwt__Key in Website → Environment Variables.");
+        "Set Jwt__Key in Railway Variables or your host environment.");
 }
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]

@@ -42,6 +42,9 @@ The API serves the built React app from `wwwroot` and exposes REST endpoints und
 kawayan/
 ├── database/
 │   └── deploy.sql          # Idempotent SQL deploy + seed data
+├── Dockerfile              # Railway / container build
+├── railway.toml            # Railway deploy settings
+├── .env.example            # Environment variable template
 ├── src/
 │   ├── kawayan.API/        # Backend, EF migrations, wwwroot host
 │   └── kawayan.Web/        # React SPA source
@@ -127,7 +130,64 @@ Change these credentials before any public deployment.
 | `Database:ApplyMigrationsOnStartup` | Run EF migrations on startup (default `true` in Development) |
 | `Database:SeedOnStartup` | Run C# seed data on startup (default `true` in Development) |
 
-On hosted platforms (e.g. MonsterASP), set these as environment variables using `__` as the section separator (`ConnectionStrings__DefaultConnection`, `Jwt__Key`, etc.).
+On hosted platforms (Railway, MonsterASP, etc.), set these as environment variables using `__` as the section separator (`ConnectionStrings__DefaultConnection`, `Jwt__Key`, etc.). See `.env.example`.
+
+## Deploy to Railway (Hobby + external SQL Server)
+
+Railway hosts the app; SQL Server stays on an external provider (e.g. MonsterASP).
+
+### 1. Prepare the database
+
+Run `database/deploy.sql` against your external SQL Server once (SSMS, Azure Data Studio, or `sqlcmd`). Enable remote SQL access on the database host so Railway can connect.
+
+### 2. Create the Railway service
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → select this repo.
+2. Railway detects `Dockerfile` and `railway.toml` automatically.
+3. No Railway database plugin is needed — use your existing SQL Server connection string.
+
+### 3. Set variables
+
+In the Railway service → **Variables**, add the values from `.env.example`:
+
+| Variable | Notes |
+|----------|--------|
+| `ConnectionStrings__DefaultConnection` | MonsterASP (or other) SQL connection string |
+| `Jwt__Key` | Random string, ≥ 32 characters |
+| `Jwt__Issuer` / `Jwt__Audience` | `kawayan` |
+| `Database__ApplyMigrationsOnStartup` | `false` (use `deploy.sql`) |
+| `Database__SeedOnStartup` | `false` if seed data is already in SQL |
+
+`ASPNETCORE_ENVIRONMENT=Production` is set in the Dockerfile.
+
+### 4. Persist uploads
+
+Attach a Railway **Volume** mounted at:
+
+```text
+/app/wwwroot/uploads
+```
+
+Without this, admin-uploaded images are lost on redeploy.
+
+### 5. Deploy
+
+Push to GitHub (or click **Deploy**). Railway builds the Docker image (React + .NET), binds to the `PORT` it assigns, and serves the SPA from `wwwroot`.
+
+Optional: **Settings → Networking → Custom Domain** for your production URL.
+
+### Local Docker test
+
+```powershell
+docker build -t kawayan .
+docker run --rm -p 8080:8080 -e PORT=8080 `
+  -e ConnectionStrings__DefaultConnection="Server=...;..." `
+  -e Jwt__Key="local-dev-key-at-least-32-chars!!" `
+  -e Jwt__Issuer=kawayan -e Jwt__Audience=kawayan `
+  kawayan
+```
+
+Open [http://localhost:8080](http://localhost:8080).
 
 ## Database
 
