@@ -11,11 +11,7 @@ public static class DatabaseConnection
         if (!string.IsNullOrWhiteSpace(fromConfig))
             return fromConfig.Trim();
 
-        var databaseUrl = FirstNonEmpty(
-            configuration["DATABASE_URL"],
-            configuration["DATABASE_PUBLIC_URL"],
-            Environment.GetEnvironmentVariable("DATABASE_URL"),
-            Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"));
+        var databaseUrl = ResolveDatabaseUrl(configuration);
 
         if (!string.IsNullOrWhiteSpace(databaseUrl))
         {
@@ -24,9 +20,11 @@ public static class DatabaseConnection
             {
                 throw new InvalidOperationException(
                     "DATABASE_URL contains unresolved Railway template syntax. " +
-                    "On the kawayan service use Add Reference → Postgres → DATABASE_URL, " +
-                    "or set DATABASE_URL=${{YourPostgresServiceName.DATABASE_URL}}.");
+                    "Paste the resolved DATABASE_PUBLIC_URL from Postgres → Variables on the kawayan service.");
             }
+
+            var host = new Uri(NormalizeDatabaseUrl(databaseUrl)).Host;
+            Console.Error.WriteLine($"[kawayan] database host: {host}");
 
             return FromDatabaseUrl(databaseUrl);
         }
@@ -45,6 +43,49 @@ public static class DatabaseConnection
             "Also set Jwt__Key (≥32 chars). See .env.example.");
     }
 
+    private static string? ResolveDatabaseUrl(IConfiguration configuration)
+    {
+        var databaseUrl = FirstNonEmpty(
+            configuration["DATABASE_URL"],
+            Environment.GetEnvironmentVariable("DATABASE_URL"));
+        var publicUrl = FirstNonEmpty(
+            configuration["DATABASE_PUBLIC_URL"],
+            Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"));
+
+        // Railway internal DNS often fails when DATABASE_URL was typed manually.
+        if (UsesRailwayInternalHost(databaseUrl) && !string.IsNullOrWhiteSpace(publicUrl))
+        {
+            Console.Error.WriteLine("[kawayan] DATABASE_PUBLIC_URL preferred over unreachable .railway.internal host.");
+            return publicUrl;
+        }
+
+        return FirstNonEmpty(databaseUrl, publicUrl);
+    }
+
+    private static bool UsesRailwayInternalHost(string? databaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(databaseUrl)) return false;
+        try
+        {
+            return new Uri(NormalizeDatabaseUrl(databaseUrl.Trim().Trim('"'))).Host
+                .EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return databaseUrl.Contains(".railway.internal", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string NormalizeDatabaseUrl(string databaseUrl)
+    {
+        if (!databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+            && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "postgresql://" + databaseUrl.TrimStart('/');
+        }
+
+        return databaseUrl;
+    }
     private static void LogMissingConfigDiagnostics()
     {
         var keys = new[]
@@ -100,25 +141,19 @@ public static class DatabaseConnection
     }
 
     internal static string FromDatabaseUrl(string databaseUrl)
-{
-    if (!databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-        && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
-        databaseUrl = "postgresql://" + databaseUrl.TrimStart('/');
+        databaseUrl = NormalizeDatabaseUrl(databaseUrl);
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':', 2);
+        var username = Uri.UnescapeDataString(userInfo[0]);
+        var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
+        var database = uri.AbsolutePath.TrimStart('/');
+
+        var isInternal = uri.Host.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase);
+        var ssl = isInternal ? "SSL Mode=Disable" : "SSL Mode=Require;Trust Server Certificate=true";
+
+        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};{ssl}";
     }
-
-    var uri = new Uri(databaseUrl);
-    var userInfo = uri.UserInfo.Split(':', 2);
-    var username = Uri.UnescapeDataString(userInfo[0]);
-    var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
-    var database = uri.AbsolutePath.TrimStart('/');
-
-    // Railway internal private network does not use SSL
-    var isInternal = uri.Host.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase);
-    var ssl = isInternal ? "SSL Mode=Disable" : "SSL Mode=Require;Trust Server Certificate=true";
-
-    return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};{ssl}";
-}
 
     private static string? FirstNonEmpty(params string?[] values)
     {
