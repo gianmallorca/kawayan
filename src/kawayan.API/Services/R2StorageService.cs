@@ -1,3 +1,4 @@
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 
@@ -31,12 +32,12 @@ public class R2StorageService
         _bucketName = bucketName.Trim();
         _publicUrl = publicUrl.Trim().TrimEnd('/');
         _client = new AmazonS3Client(
-            accessKey.Trim(),
-            secretKey.Trim(),
+            new BasicAWSCredentials(accessKey.Trim(), secretKey.Trim()),
             new AmazonS3Config
             {
                 ServiceURL = endpoint.Trim(),
-                ForcePathStyle = true
+                ForcePathStyle = true,
+                AuthenticationRegion = "auto"
             });
     }
 
@@ -46,13 +47,21 @@ public class R2StorageService
             throw new InvalidOperationException("R2 storage is not configured.");
 
         using var stream = file.OpenReadStream();
-        await _client.PutObjectAsync(new PutObjectRequest
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        var response = await _client.PutObjectAsync(new PutObjectRequest
         {
             BucketName = _bucketName,
             Key = key,
             InputStream = stream,
-            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            DisablePayloadSigning = true,
+            DisableDefaultChecksumValidation = true
         });
+
+        if (response.HttpStatusCode is not System.Net.HttpStatusCode.OK)
+            throw new InvalidOperationException($"R2 upload failed with status {response.HttpStatusCode}.");
 
         return $"{_publicUrl}/{key}";
     }

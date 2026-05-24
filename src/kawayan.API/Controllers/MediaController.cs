@@ -15,10 +15,22 @@ public class MediaController(MediaService mediaService) : ControllerBase
         => Ok(await mediaService.GetPagedAsync(request.Page, request.PageSize));
 
     [HttpPost]
-    public async Task<IActionResult> Upload(IFormFile file)
+    public async Task<IActionResult> Upload(IFormFile? file)
     {
-        var result = await mediaService.UploadAsync(file);
-        return result is null ? BadRequest() : Ok(result);
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "No file was uploaded." });
+
+        try
+        {
+            var result = await mediaService.UploadAsync(file);
+            return result is null
+                ? BadRequest(new { error = "Upload failed." })
+                : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]

@@ -104,14 +104,16 @@ export function MediaManagerPage() {
 
     }
 
-    await uploadMedia(file);
-
-    if (inputRef.current) inputRef.current.value = '';
-
-    setPage(1);
-
-    load();
-
+    try {
+      await uploadMedia(file);
+      showToast('Image uploaded successfully', 'success');
+      setPage(1);
+      await load();
+    } catch {
+      showToast('Upload failed. Check R2 settings or file type.', 'error');
+    } finally {
+      if (inputRef.current) inputRef.current.value = '';
+    }
   };
 
 

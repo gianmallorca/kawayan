@@ -97,7 +97,7 @@ public class MediaService(AppDbContext db, IWebHostEnvironment env, R2StorageSer
             return false;
         }
         var contentType = file.ContentType ?? string.Empty;
-        if (!ImageMimeTypes.Contains(contentType))
+        if (!ImageMimeTypes.Contains(contentType) && !IsAllowedImageExtension(file.FileName, allowSvg))
         {
             error = "Only image files are allowed (JPG, PNG, WebP, GIF" + (allowSvg ? ", SVG" : "") + ").";
             return false;
@@ -148,6 +148,16 @@ public class MediaService(AppDbContext db, IWebHostEnvironment env, R2StorageSer
         return await db.MediaFiles.AnyAsync(m => m.Url == url);
     }
 
+    private static bool IsAllowedImageExtension(string fileName, bool allowSvg)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" => true,
+            ".svg" => allowSvg,
+            _ => false
+        };
+    }
+
     private static string SanitizePrefix(string prefix) =>
         new string(prefix.Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray()).ToLowerInvariant();
 
@@ -161,12 +171,10 @@ public class MediaService(AppDbContext db, IWebHostEnvironment env, R2StorageSer
         var media = await db.MediaFiles.FindAsync(id);
         if (media is null) return false;
 
-        await TryDeleteFileIfUnusedAsync(media.Url);
-        if (await db.MediaFiles.FindAsync(id) is { } stillThere)
-        {
-            db.MediaFiles.Remove(stillThere);
-            await db.SaveChangesAsync();
-        }
+        var url = media.Url;
+        db.MediaFiles.Remove(media);
+        await db.SaveChangesAsync();
+        await TryDeleteFileIfUnusedAsync(url);
         return true;
     }
 }
