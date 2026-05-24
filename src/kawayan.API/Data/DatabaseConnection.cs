@@ -4,7 +4,10 @@ public static class DatabaseConnection
 {
     public static string Resolve(IConfiguration configuration)
     {
-        var fromConfig = configuration.GetConnectionString("DefaultConnection");
+        var fromConfig = FirstNonEmpty(
+            configuration.GetConnectionString("DefaultConnection"),
+            configuration["ConnectionStrings:DefaultConnection"],
+            Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"));
         if (!string.IsNullOrWhiteSpace(fromConfig))
             return fromConfig.Trim();
 
@@ -32,10 +35,37 @@ public static class DatabaseConnection
         if (fromParts is not null)
             return fromParts;
 
+        LogMissingConfigDiagnostics();
+
         throw new InvalidOperationException(
-            "ConnectionStrings:DefaultConnection is not configured. " +
-            "On Railway: kawayan service → Variables → Add Reference → Postgres → DATABASE_URL. " +
-            "Or set ConnectionStrings__DefaultConnection / DATABASE_URL / PGHOST+PGUSER+PGDATABASE.");
+            "Database connection is not configured on this service. " +
+            "Railway: open the kawayan service (not Postgres) → Variables → New Variable → " +
+            "Add Reference → pick your Postgres service → DATABASE_URL. " +
+            "Service name in the reference must match exactly (e.g. Postgres vs PostgreSQL). " +
+            "Also set Jwt__Key (≥32 chars). See .env.example.");
+    }
+
+    private static void LogMissingConfigDiagnostics()
+    {
+        var keys = new[]
+        {
+            "ConnectionStrings__DefaultConnection",
+            "DATABASE_URL",
+            "DATABASE_PUBLIC_URL",
+            "PGHOST",
+            "PGUSER",
+            "PGPASSWORD",
+            "PGDATABASE",
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
+            "POSTGRES_DB"
+        };
+
+        foreach (var key in keys)
+        {
+            var set = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key));
+            Console.Error.WriteLine($"[kawayan] env {key}: {(set ? "set" : "missing")}");
+        }
     }
 
     private static string? FromPostgresEnvVars(IConfiguration configuration)
@@ -61,27 +91,34 @@ public static class DatabaseConnection
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(database))
             return null;
 
+        var isInternal = host.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase);
+        var ssl = isInternal ? "SSL Mode=Disable" : "SSL Mode=Require;Trust Server Certificate=true";
+
         var connectionString =
-            $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            $"Host={host};Port={port};Database={database};Username={user};Password={password};{ssl}";
         return connectionString;
     }
 
     internal static string FromDatabaseUrl(string databaseUrl)
+{
+    if (!databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+        && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
-        if (!databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-            && !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
-        {
-            databaseUrl = "postgresql://" + databaseUrl.TrimStart('/');
-        }
-
-        var uri = new Uri(databaseUrl);
-        var userInfo = uri.UserInfo.Split(':', 2);
-        var username = Uri.UnescapeDataString(userInfo[0]);
-        var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
-        var database = uri.AbsolutePath.TrimStart('/');
-
-        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+        databaseUrl = "postgresql://" + databaseUrl.TrimStart('/');
     }
+
+    var uri = new Uri(databaseUrl);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var username = Uri.UnescapeDataString(userInfo[0]);
+    var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
+    var database = uri.AbsolutePath.TrimStart('/');
+
+    // Railway internal private network does not use SSL
+    var isInternal = uri.Host.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase);
+    var ssl = isInternal ? "SSL Mode=Disable" : "SSL Mode=Require;Trust Server Certificate=true";
+
+    return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};{ssl}";
+}
 
     private static string? FirstNonEmpty(params string?[] values)
     {

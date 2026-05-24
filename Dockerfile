@@ -22,6 +22,8 @@ RUN mkdir -p /app/publish/wwwroot/uploads
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "kawayan.API.dll"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
