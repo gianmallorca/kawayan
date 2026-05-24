@@ -1,0 +1,13 @@
+bin/
+obj/
+node_modules/
+dist/
+src/kawayan.API/wwwroot/assets/
+src/kawayan.API/wwwroot/index.html
+*.user
+*.suo
+.vs/
+.env
+.env.local
+appsettings.Development.json
+**/appsettings.Development.json
