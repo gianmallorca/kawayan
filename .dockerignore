@@ -12,7 +12,6 @@ publish-test
 **/*.suo
 .env
 .env.*
-!/.env.example
 **/appsettings.Development.json
 terminals
 agent-transcripts

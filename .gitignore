@@ -10,7 +10,6 @@ src/kawayan.API/wwwroot/index.html
 .env
 .env.local
 .env.*
-!.env.example
 _docker-test-publish
 appsettings.Development.json
 **/appsettings.Development.json

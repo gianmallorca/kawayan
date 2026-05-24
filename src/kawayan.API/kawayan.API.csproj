@@ -31,32 +31,23 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.4" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="QuestPDF" Version="2025.1.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
   </ItemGroup>
 
-  <Target Name="NpmInstall"
-          BeforeTargets="BuildFrontend"
-          Condition="'$(SkipSpaBuild)' != 'true'"
-          Inputs="$(FrontendDir)/package.json;$(FrontendDir)/package-lock.json"
-          Outputs="$(FrontendDir)/node_modules/.package-lock.json">
+  <Target Name="NpmInstall" BeforeTargets="BuildFrontend" Condition="'$(SkipSpaBuild)' != 'true'" Inputs="$(FrontendDir)/package.json;$(FrontendDir)/package-lock.json" Outputs="$(FrontendDir)/node_modules/.package-lock.json">
     <Message Text="[Pipeline] Installing npm dependencies..." Importance="high" />
     <Exec Command="npm ci" WorkingDirectory="$(FrontendDir)" />
   </Target>
 
   <!-- PrepareForPublish: VS / dotnet publish must rebuild SPA even when CoreCompile is skipped. -->
-  <Target Name="BuildFrontend"
-          BeforeTargets="BeforeBuild;PrepareForPublish"
-          Condition="'$(SkipSpaBuild)' != 'true'">
+  <Target Name="BuildFrontend" BeforeTargets="BeforeBuild;PrepareForPublish" Condition="'$(SkipSpaBuild)' != 'true'">
     <Message Text="[Pipeline] Building frontend..." Importance="high" />
     <Exec Command="npm run build" WorkingDirectory="$(FrontendDir)" />
   </Target>
 
-  <Target Name="CleanWwwRoot"
-          AfterTargets="BuildFrontend"
-          BeforeTargets="CopyFrontendToWwwRoot"
-          Condition="'$(SkipSpaBuild)' != 'true'">
+  <Target Name="CleanWwwRoot" AfterTargets="BuildFrontend" BeforeTargets="CopyFrontendToWwwRoot" Condition="'$(SkipSpaBuild)' != 'true'">
     <Message Text="[Pipeline] Cleaning wwwroot..." Importance="high" />
     <RemoveDir Directories="$(WwwRootDir)/assets" Condition="Exists('$(WwwRootDir)/assets')" />
     <Delete Files="$(WwwRootDir)/index.html" Condition="Exists('$(WwwRootDir)/index.html')" />
@@ -64,22 +55,15 @@
     <MakeDir Directories="$(WwwRootDir)/uploads" Condition="!Exists('$(WwwRootDir)/uploads')" />
   </Target>
 
-  <Target Name="CopyFrontendToWwwRoot"
-          AfterTargets="CleanWwwRoot"
-          Condition="'$(SkipSpaBuild)' != 'true'">
+  <Target Name="CopyFrontendToWwwRoot" AfterTargets="CleanWwwRoot" Condition="'$(SkipSpaBuild)' != 'true'">
     <ItemGroup>
       <FrontendDistFiles Include="$(FrontendDistDir)/**/*" />
     </ItemGroup>
     <Message Text="[Pipeline] Copying frontend dist to wwwroot..." Importance="high" />
-    <Copy SourceFiles="@(FrontendDistFiles)"
-          DestinationFiles="@(FrontendDistFiles->'$(WwwRootDir)/%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(FrontendDistFiles)" DestinationFiles="@(FrontendDistFiles->'$(WwwRootDir)/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="false" />
   </Target>
 
-  <Target Name="CleanCompressedCache"
-          AfterTargets="CopyFrontendToWwwRoot"
-          BeforeTargets="PrepareForPublish"
-          Condition="'$(SkipSpaBuild)' != 'true'">
+  <Target Name="CleanCompressedCache" AfterTargets="CopyFrontendToWwwRoot" BeforeTargets="PrepareForPublish" Condition="'$(SkipSpaBuild)' != 'true'">
     <Message Text="[Pipeline] Clearing compressed asset cache..." Importance="high" />
     <RemoveDir Directories="$(IntermediateOutputPath)compressed" Condition="Exists('$(IntermediateOutputPath)compressed')" />
   </Target>

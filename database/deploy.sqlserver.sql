@@ -1,6 +1,8 @@
 /*
 ================================================================================
- kawayan - Unified Database Deploy Script
+ kawayan - Unified Database Deploy Script (LEGACY — SQL Server only)
+================================================================================
+ ⚠️  Superseded by database/deploy.sql (PostgreSQL). Kept for archival/reference.
  (Brand: kaw.a.yan — Baybayin ᜃᜏ᜔.ᜀᜌ᜔.ᜀᜈ᜔; backend/SQL identifiers: kawayan)
 ================================================================================
  Purpose   : Apply all EF Core migrations to SQL Server (idempotent / safe to re-run)

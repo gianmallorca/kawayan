@@ -11,19 +11,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException(
-        "ConnectionStrings:DefaultConnection is not configured. " +
-        "Set ConnectionStrings__DefaultConnection (Railway Variables, MonsterASP env vars, or appsettings).");
-}
+var connectionString = DatabaseConnection.Resolve(builder.Configuration);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -33,7 +29,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CompanyDetailsService>();
@@ -137,7 +133,7 @@ if (applyMigrations || seedOnStartup)
         logger.LogError(
             ex,
             "Database startup failed (migrate={Migrate}, seed={Seed}). " +
-            "Run database/deploy.sql on MonsterASP or set Database__ApplyMigrationsOnStartup=true after fixing the connection.",
+            "Check PostgreSQL connection or set Database__ApplyMigrationsOnStartup=true after fixing the connection.",
             applyMigrations,
             seedOnStartup);
     }

@@ -1,0 +1,12 @@
+{
+  "files.associations": {
+    "*.sql": "sql",
+    "*.pgsql": "sql",
+    "database/deploy.sqlserver.sql": "sql"
+  },
+  "mssql.enableIntelliSense": false,
+  "sqltools.useNodeRuntime": true,
+  "[sql]": {
+    "editor.defaultFormatter": "mtxr.sqltools"
+  }
+}
